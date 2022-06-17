@@ -1,0 +1,113 @@
+version: "3"
+services:
+
+  gaobl0:
+    container_name: gaobl0
+    image: "eu.accesa.gaobl/gaobl-validator:1.0-SNAPSHOT"
+    environment:
+      - GRPC_PORT=26658
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.2
+
+  node0:
+    container_name: node0
+    image: "tendermint/tendermint:v0.34.11"
+    ports:
+      - "26656-26657:26656-26657"
+    environment:
+      - ID=0
+      - LOG=$${LOG:-tendermint.log}
+    volumes:
+      - ./node0:/tendermint:Z
+    entrypoint: ''
+    command: sh -c "tendermint start --consensus.create_empty_blocks=false --abci grpc --proxy_app=tcp://gaobl0:26658"
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.3
+
+  gaobl1:
+    container_name: gaobl1
+    image: "eu.accesa.gaobl/gaobl-validator:1.0-SNAPSHOT"
+    environment:
+      - GRPC_PORT=26661
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.4
+
+  node1:
+    container_name: node1
+    image: "tendermint/tendermint:v0.34.11"
+    ports:
+      - "26659-26660:26656-26657"
+    environment:
+      - ID=0
+      - LOG=$${LOG:-tendermint.log}
+    volumes:
+      - ./node1:/tendermint:Z
+    entrypoint: ''
+    command: sh -c "tendermint gen_validator && tendermint start --consensus.create_empty_blocks=false --abci grpc --proxy_app=tcp://gaobl1:26661"
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.5
+
+  gaobl2:
+    container_name: gaobl2
+    image: "eu.accesa.gaobl/gaobl-validator:1.0-SNAPSHOT"
+    environment:
+      - GRPC_PORT=26664
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.6
+
+
+  node2:
+    container_name: node2
+    image: "tendermint/tendermint:v0.34.11"
+    ports:
+      - "26662-26663:26656-26657"
+    environment:
+      - ID=0
+      - LOG=$${LOG:-tendermint.log}
+    volumes:
+      - ./node2:/tendermint:Z
+    entrypoint: ''
+    command: sh -c "tendermint gen_validator && tendermint start --consensus.create_empty_blocks=false --abci grpc --proxy_app=tcp://gaobl2:26664"
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.7
+
+  gaobl3:
+    container_name: gaobl3
+    image: "eu.accesa.gaobl/gaobl-validator:1.0-SNAPSHOT"
+    environment:
+      - GRPC_PORT=26667
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.8
+
+  node3:
+    container_name: node3
+    image: "tendermint/tendermint:v0.34.11"
+    ports:
+      - "26665-26666:26656-26657"
+    environment:
+      - ID=0
+      - LOG=$${LOG:-tendermint.log}
+    volumes:
+      - ./node3:/tendermint:Z
+    entrypoint: ''
+    command: sh -c "tendermint gen_validator && tendermint start --consensus.create_empty_blocks=false --abci grpc --proxy_app=tcp://gaobl3:26667"
+    networks:
+      localnet:
+        ipv4_address: 192.167.10.9
+
+networks:
+  localnet:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.167.10.0/16
+
+
