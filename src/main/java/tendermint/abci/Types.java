@@ -23432,7 +23432,7 @@ public final class Types {
   /**
    * Protobuf type {@code tendermint.abci.ResponseQuery}
    */
-  public static final class ResponseQuery extends
+  public static class ResponseQuery extends
       com.google.protobuf.GeneratedMessageV3 implements
       // @@protoc_insertion_point(message_implements:tendermint.abci.ResponseQuery)
       ResponseQueryOrBuilder {

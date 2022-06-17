@@ -4,6 +4,8 @@ services:
   gaobl0:
     container_name: gaobl0
     image: "eu.accesa.gaobl/gaobl-validator:1.0-SNAPSHOT"
+    ports:
+      - "5005:5005"
     environment:
       - GRPC_PORT=26658
     networks:

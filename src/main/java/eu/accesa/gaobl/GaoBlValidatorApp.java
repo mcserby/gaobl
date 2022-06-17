@@ -1,9 +1,11 @@
 package eu.accesa.gaobl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.protobuf.ByteString;
-import eu.accesa.gaobl.model.GaoBlMessage;
-import eu.accesa.gaobl.model.GaoBlTransaction;
+import eu.accesa.gaobl.dto.Wallet;
+import eu.accesa.gaobl.dto.CoinTransactionRequest;
+import eu.accesa.gaobl.service.CoinTransactionService;
+import eu.accesa.gaobl.service.WalletService;
 import io.grpc.stub.StreamObserver;
 import jetbrains.exodus.ArrayByteIterable;
 import jetbrains.exodus.ByteIterable;
@@ -11,18 +13,20 @@ import jetbrains.exodus.env.Environment;
 import jetbrains.exodus.env.Store;
 import jetbrains.exodus.env.StoreConfig;
 import jetbrains.exodus.env.Transaction;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import tendermint.abci.ABCIApplicationGrpc;
 import tendermint.abci.Types;
 
-import java.nio.charset.StandardCharsets;
-import java.security.Signature;
-import java.security.interfaces.RSAPublicKey;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
+
+import static eu.accesa.gaobl.SecurityUtils.OM;
+import static eu.accesa.gaobl.constants.Operations.CREATE_WALLET;
+import static eu.accesa.gaobl.constants.Operations.SEND_COINS;
 
 public class GaoBlValidatorApp extends ABCIApplicationGrpc.ABCIApplicationImplBase {
 
@@ -32,6 +36,9 @@ public class GaoBlValidatorApp extends ABCIApplicationGrpc.ABCIApplicationImplBa
     private Environment env;
     private Transaction txn = null;
     private Store store = null;
+
+    private WalletService walletService = new WalletService();
+    private CoinTransactionService coinTransactionService = new CoinTransactionService();
 
     GaoBlValidatorApp(Environment env) {
         this.env = env;
@@ -57,6 +64,11 @@ public class GaoBlValidatorApp extends ABCIApplicationGrpc.ABCIApplicationImplBa
         Types.ConsensusParams consensusParams = request.getConsensusParams();
         List<Types.ValidatorUpdate> validatorsList = request.getValidatorsList();
 
+        String publicKey = "MIIBtzCCASwGByqGSM44BAEwggEfAoGBAP1/U4EddRIpUt9KnC7s5Of2EbdSPO9EAMMeP4C2USZpRV1AIlH7WT2NWPq/xfW6MPbLm1Vs14E7gB00b/JmYLdrmVClpJ+f6AR7ECLCT7up1/63xhv4O1fnxqimFQ8E+4P208UewwI1VBNaFpEy9nXzrith1yrv8iIDGZ3RSAHHAhUAl2BQjxUjC8yykrmCouuEC/BYHPUCgYEA9+GghdabPd7LvKtcNrhXuXmUr7v6OuqC+VdMCz0HgmdRWVeOutRZT+ZxBxCBgLRJFnEj6EwoFhO3zwkyjMim4TwWeotUfI0o4KOuHiuzpnWRbqN/C/ohNWLx+2J6ASQ7zKTxvqhRkImog9/hWuWfBpKLZl6Ae1UlZAFMO/7PSSoDgYQAAoGAestXy+psFPjJ/qtXIcFyAyZjGuMlMtd8UdGUg8Ma+f196PvOvUE390oQbg9Q2oyywUDDzHdXSJaCxBjtnqAODtdQveF+3+dSe2I7CuwARwr/4jPJJo1wcNFVmkHZhhfvsQMVPKkdJHp60iKhgoLBB4F3Q56fQ5Xn5GaqT7b5oJI=";
+        Wallet wallet = new Wallet(UUID.randomUUID().toString(), 100000000, publicKey, "cto");
+        WalletRepository walletRepository = new WalletRepository();
+        walletRepository.saveWallet(wallet);
+
         var response = Types.ResponseInitChain.newBuilder()
                 .addAllValidators(validatorsList)
                 .setConsensusParams(consensusParams)
@@ -78,23 +90,34 @@ public class GaoBlValidatorApp extends ABCIApplicationGrpc.ABCIApplicationImplBa
     public void deliverTx(Types.RequestDeliverTx req, StreamObserver<Types.ResponseDeliverTx> responseObserver) {
         var tx = req.getTx();
         int code = validate(tx);
-        if (code == 0) {
-            List<byte[]> parts = split(tx, '=');
-            var key = new ArrayByteIterable(parts.get(0));
-            var value = new ArrayByteIterable(parts.get(1));
-            store.put(txn, key, value);
+
+        List<byte[]> parts = split(tx, '=');
+
+        String value = new String(new ArrayByteIterable(parts.get(1)).getBytesUnsafe());
+        String key = new String(new ArrayByteIterable(parts.get(0)).getBytesUnsafe());
+
+        switch (key) {
+            case CREATE_WALLET:
+                walletService.processWallet(value);
+                break;
+            case SEND_COINS:
+                coinTransactionService.processCoinTransaction(value);
+                break;
+            default:
+                break;
         }
 
+        //TODO: set as response wallet or transaction result.
         Types.EventAttribute address = Types.EventAttribute.newBuilder()
-                        .setKey(ByteString.copyFromUtf8("address"))
-                        .setValue(ByteString.copyFromUtf8("Cluj"))
-                        .setIndex(true)
-                        .build();
+                .setKey(ByteString.copyFromUtf8("walletId"))
+                .setValue(ByteString.copyFromUtf8("Cluj"))
+                .setIndex(true)
+                .build();
         Types.EventAttribute amount = Types.EventAttribute.newBuilder()
-                        .setKey(ByteString.copyFromUtf8("amount"))
-                        .setValue(ByteString.copyFromUtf8("1000"))
-                        .setIndex(true)
-                        .build();
+                .setKey(ByteString.copyFromUtf8("amount"))
+                .setValue(ByteString.copyFromUtf8("0"))
+                .setIndex(true)
+                .build();
 
         List<Types.EventAttribute> attributesList = new ArrayList<>();
         attributesList.add(address);
@@ -201,30 +224,46 @@ public class GaoBlValidatorApp extends ABCIApplicationGrpc.ABCIApplicationImplBa
     }
 
     private int validate(ByteString tx) {
-        List<byte[]> parts = split(tx, '=');
-        logger.info("transaction message: " + parts.get(0).toString() + " : " + parts.get(1).toString());
-        if (parts.size() != 2) {
-            return 1;
+        try {
+            List<Wallet> wallets = walletService.findWallets();
+
+            List<byte[]> parts = split(tx, '=');
+            logger.info("transaction message: " + parts.get(0).toString() + " : " + parts.get(1).toString());
+            if (parts.size() != 2) {
+                return 1;
+            }
+
+            String key = new String(new ArrayByteIterable(parts.get(0)).getBytesUnsafe());
+            String value = new String(new ArrayByteIterable(parts.get(1)).getBytesUnsafe());
+
+            switch (key) {
+                case CREATE_WALLET:
+                    if (!walletService.isWalletDataValid(value)) {
+                        logger.info("Invalid request at create wallet operation");
+                        return 1;
+                    }
+                    break;
+                case SEND_COINS:
+                    if (!coinTransactionService.isTransactionValid(value)) {
+                        logger.info("Invalid signature at send coin operation");
+                        return 2;
+                    }
+                    break;
+                default:
+                    logger.info("Invalid operation key");
+                    return 1;
+            }
+            return 0;
+        } catch (Exception e) {
+            return 2;
         }
-        byte[] key = parts.get(0);
-        byte[] value = parts.get(1);
-
-        // check if the same key=value already exists
-//        var stored = getPersistedValue(key);
-//        if (stored != null && Arrays.equals(stored, value)) {
-//            return 2;
-//        }
-
-        return 0;
     }
-
-
 
     private List<byte[]> split(ByteString tx, char separator) {
         var arr = tx.toByteArray();
         int i;
         for (i = 0; i < tx.size(); i++) {
-            if (arr[i] == (byte)separator) {
+            if (arr[i] == (byte) separator) {
                 break;
             }
         }

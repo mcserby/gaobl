@@ -1,5 +1,6 @@
 package eu.accesa.gaobl;
 
+import jetbrains.exodus.entitystore.PersistentEntityStore;
 import jetbrains.exodus.env.Environment;
 import jetbrains.exodus.env.Environments;
 
@@ -17,4 +18,13 @@ public class App {
             server.blockUntilShutdown();
         }
     }
+
+//    public static void main(String[] args) throws IOException, InterruptedException {
+//        try (PersistentEntityStore env = PersistentEntityStores.newInstance("tmp/storage")) {
+//            var app = new GaoBlValidatorApp(env);
+//            var server = new GrpcServer(app, 26658);
+//            server.start();
+//            server.blockUntilShutdown();
+//        }
+//    }
 }

@@ -1,5 +1,7 @@
 package tendermint.abci;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+
 import static io.grpc.MethodDescriptor.generateFullMethodName;
 import static io.grpc.stub.ClientCalls.asyncBidiStreamingCall;
 import static io.grpc.stub.ClientCalls.asyncClientStreamingCall;
